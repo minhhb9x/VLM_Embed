@@ -257,10 +257,18 @@ class DistillationCollator:
         process_student_fn = process_vlm_inputs_fns[self.model_args.model_backbone]
         process_teacher_fn = process_vlm_inputs_fns[self.model_args.teacher_backbone]
         
-        processed_student_qry_inputs = process_student_fn(student_qry_inputs, processor=self.student_processor, max_length=self.data_args.max_len)
-        processed_student_pos_inputs = process_student_fn(student_pos_inputs, processor=self.student_processor, max_length=self.data_args.max_len)
-        processed_teacher_qry_inputs = process_teacher_fn(teacher_qry_inputs, processor=self.teacher_processor, max_length=self.data_args.max_len)
-        processed_teacher_pos_inputs = process_teacher_fn(teacher_pos_inputs, processor=self.teacher_processor, max_length=self.data_args.max_len)
+        processed_student_qry_inputs = process_student_fn(student_qry_inputs, processor=self.student_processor, 
+                                                          max_length=self.data_args.max_len, 
+                                                          square_padding=True)
+        processed_student_pos_inputs = process_student_fn(student_pos_inputs, processor=self.student_processor, 
+                                                          max_length=self.data_args.max_len,
+                                                          square_padding=True)
+        processed_teacher_qry_inputs = process_teacher_fn(teacher_qry_inputs, processor=self.teacher_processor, 
+                                                          max_length=self.data_args.max_len,
+                                                          square_padding=True)
+        processed_teacher_pos_inputs = process_teacher_fn(teacher_pos_inputs, processor=self.teacher_processor, 
+                                                          max_length=self.data_args.max_len,
+                                                          square_padding=True)
         
         return {
             'student_inputs':{
