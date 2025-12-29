@@ -202,6 +202,7 @@ class Distiller(nn.Module):
             })
         print("Projector parameters added to optimizer.")
         return optimizer
+    
 class DistillationCollator:
     def __init__(self, student_processor: ProcessorMixin, teacher_processor: ProcessorMixin,
                  model_args: ModelArguments, data_args: DataArguments, training_args: TrainingArguments,
@@ -303,6 +304,7 @@ class DistillationDataset(Dataset):
     
     def __len__(self):
         return len(self.train_data)
+    
     def _get_image(self, img_path, backbone):
         if not img_path:
             return None
