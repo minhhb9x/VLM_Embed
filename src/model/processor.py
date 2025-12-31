@@ -26,7 +26,7 @@ from src.model.vlm_backbone.qwen2_vl_tokenselection import \
 from src.model.vlm_backbone.internvideo2.modeling_internvideo2 import InternVideo2_Stage2
 
 from src.model.llava.model.language_model.llava_qwen import LlavaQwen2ForCausalLM
-from src.model.llava.processing_fastvlm import FastVLMProcessor
+from src.model.llava.processing_fastvlm import FastVLMProcessor, FastVLMProcessor2
 from transformers import AutoTokenizer, AutoModel
 from peft import PeftConfig
 
@@ -277,7 +277,7 @@ def load_processor(model_args, data_args=None):
                                              image_mean=[0.0, 0.0, 0.0],
                                              image_std=[1.0, 1.0, 1.0],
                                              size={"shortest_edge": 1024})
-        processor = FastVLMProcessor(
+        processor = FastVLMProcessor2(
             image_processor=image_processor,
             tokenizer=tokenizer
         )
@@ -470,6 +470,13 @@ def FastVLM_process_fn(model_inputs: dict, processor: FastVLMProcessor, max_leng
     )
     return inputs
 
+def FastVLM_process_fn2(model_inputs: dict, processor: FastVLMProcessor2, max_length=None, square_padding=False):
+    texts, visual_inputs = model_inputs['text'], model_inputs['images']
+    inputs = processor(
+        images=visual_inputs,
+        texts=texts,
+    )
+    return inputs
 
 def Qwen2_VL_process_fn(model_inputs: dict, processor: Qwen2VLProcessor, max_length=None, square_padding=False):
     # TODO: set separate max_len for text/visual inputs, currently max_length is only applied to text-only data
@@ -503,7 +510,7 @@ def Qwen2_VL_process_fn(model_inputs: dict, processor: Qwen2VLProcessor, max_len
                 if square_padding:
                     for iid, image in enumerate(images):
                         images[iid] = expand2square(image, background_color=tuple(int(x*255) 
-                                                                for x in processor.image_processor.image_mean))
+                                                                for x in [0, 0, 0]))
                 for iid, image in enumerate(images):
                     # rare case in MMEB eval: resize to 28*28 if either w or h is smaller than 28
                     if image.size[0] < 28 or image.size[1] < 28:
@@ -588,7 +595,7 @@ def Qwen2_VL_TokenSelection_process_fn(model_inputs: dict, processor: Qwen2VLTok
             if square_padding:
                 for iid, image in enumerate(images):
                     images[iid] = expand2square(image, background_color=tuple(int(x*255) 
-                                                            for x in processor.image_processor.image_mean))
+                                                            for x in [0, 0, 0]))
             if VLM_IMAGE_TOKENS[QWEN2_VL] in text:
                 inputs = processor(text=[text], images=[images], return_tensors="np", max_length=None, truncation=False, input_data_format=ChannelDimension.LAST)
             elif VLM_VIDEO_TOKENS[QWEN2_VL] in text:

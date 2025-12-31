@@ -9,6 +9,7 @@ from typing import Optional, Union, Optional
 from PIL import Image
 import numpy as np
 import torch
+import torch.nn.functional as F
 
 from transformers import CLIPImageProcessor
 from transformers.feature_extraction_utils import BatchFeature
@@ -111,4 +112,99 @@ class FastVLMProcessor(ProcessorMixin):
             generated_outputs, skip_special_tokens=True, clean_up_tokenization_spaces=True
         )
 
-__all__ = ["FastVLMProcessor"]
+class FastVLMProcessor2(ProcessorMixin):
+    r"""
+    Constructs a FastVLM processor which wraps a FastVLM image processor and a tokenizer into a single processor.
+    [`FastVLMProcessor`] offers all the functionalities of [`CLIPImageProcessor`] and [`PreTrainedTokenizer`]. See the
+    [`~FastVLMProcessor.__call__`] and [`~FastVLMProcessor.decode`] for more information.
+    Args:
+        image_processor ([`CLIPImageProcessor`], *optional*):
+            The image processor is a required input.
+        tokenizer ([`PreTrainedTokenizer`], *optional*):
+            The tokenizer is a required input.
+    """
+    
+    attributes = ["image_processor", "tokenizer"]
+    valid_kwargs = []
+    image_processor_class = "CLIPImageProcessor"
+    tokenizer_class = ("PreTrainedTokenizer", "PreTrainedTokenizerFast")
+
+    def __init__(self, image_processor=None, tokenizer=None, **kwargs):
+        self.image_token = "<image>" if not hasattr(tokenizer, "image_token") else tokenizer.image_token
+        super().__init__(image_processor, tokenizer, **kwargs)
+        image_processor.do_center_crop = False
+        
+    def __call__(
+        self, 
+        images: Optional[ImageInput] = None,
+        texts: Optional[Union[TextInput, PreTokenizedInput, Iterable[TextInput], Iterable[PreTokenizedInput]]] = None,
+        **kwargs: Unpack[ProcessingKwargs],
+    ):
+        input_ids = [tokenizer_image_token(text, self.tokenizer, IMAGE_TOKEN_INDEX, return_tensors="pt") for text in texts]
+        input_ids = torch.nn.utils.rnn.pad_sequence(input_ids, batch_first=True, padding_value=self.tokenizer.pad_token_id)
+        attention_mask = (input_ids != self.tokenizer.pad_token_id).long()
+        shortest_edge = self.image_processor.size['shortest_edge']
+        image_tensors = []
+        for image in images:
+            if image is not None: 
+                image = image.convert("RGB")
+                image = self.image_processor.preprocess(image, return_tensors='pt')['pixel_values'][0]
+                _, H, W = image.shape
+                # xác định long / short
+                if H >= W:
+                    long, short = H, W
+                    long_dim = 1
+                else:
+                    long, short = W, H
+                    long_dim = 2
+
+                # short_edge đã là 1024 → giữ nguyên
+                assert short == 1024, f"Expected short_edge=1024, got {short}"
+
+                # snap long_edge lên bội 16
+                new_long = math.ceil(long / 16) * 16
+
+                if new_long != long:
+                    if long_dim == 1:
+                        new_size = (new_long, short)
+                    else:
+                        new_size = (short, new_long)
+
+                    image = F.interpolate(
+                        image.unsqueeze(0),
+                        size=new_size,
+                        mode="bilinear",
+                        align_corners=False,
+                    ).squeeze(0)
+
+                image_tensors.append(image)
+        
+        if len(image_tensors) == 0: 
+            image_tensors = None
+        else:
+            shapes = [img.shape for img in image_tensors]
+            # tất cả shape giống nhau?
+            if all(s == shapes[0] for s in shapes):
+                image_tensors = torch.stack(image_tensors, dim=0)
+
+        data = {
+            "input_ids": input_ids,
+            "attention_mask": attention_mask,
+        }
+        if image_tensors is not None:
+            data["images"] = image_tensors
+
+        return BatchFeature(data=data)
+    
+    def batch_decode(self, *args, **kwargs):
+        return self.tokenizer.batch_decode(*args, **kwargs)
+    
+    def decode(self, *args, **kwargs):
+        return self.tokenizer.decode(*args, **kwargs)
+    
+    def post_process_image_text_to_text(self, generated_outputs):
+        return self.tokenizer.batch_decode(
+            generated_outputs, skip_special_tokens=True, clean_up_tokenization_spaces=True
+        )
+
+__all__ = ["FastVLMProcessor", "FastVLMProcessor2"]

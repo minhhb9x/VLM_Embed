@@ -1,6 +1,7 @@
 from src.arguments import ModelArguments, DataArguments
 from src.model.model import MMEBModel
 from src.model.processor import load_processor, QWEN2_VL, VLM_IMAGE_TOKENS, Qwen2_VL_process_fn
+from src.model.processor import LLAVA_QWEN2, FastVLM_process_fn, FastVLM_process_fn2
 from src.utils import batch_to_device
 from PIL import Image
 import torch
@@ -11,19 +12,26 @@ torch.backends.cudnn.benchmark = False
 torch.backends.cudnn.deterministic = True
 os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
 
+# model_args = ModelArguments(
+#     model_name='Qwen/Qwen2-VL-2B',
+#     checkpoint_path='TIGER-Lab/VLM2Vec-Qwen2VL-2B',
+#     pooling='last',
+#     normalize=True,
+#     model_backbone='qwen2_vl',
+#     lora=True
+# )
 model_args = ModelArguments(
-    model_name='Qwen/Qwen2-VL-2B',
-    checkpoint_path='TIGER-Lab/VLM2Vec-Qwen2VL-2B',
+    model_name='apple/FastVLM-0.5B',
     pooling='last',
     normalize=True,
-    model_backbone='qwen2_vl',
+    model_backbone=LLAVA_QWEN2,
     lora=True
 )
 data_args = DataArguments()
 
 processor = load_processor(model_args, data_args)
-model = MMEBModel.load(model_args)
-model = model.to('cuda', dtype=torch.float16)
+model = MMEBModel.build(model_args)
+model = model.to('cuda', dtype=torch.bfloat16)
 model.eval()
 
 def disable_lora_dropout(model):
@@ -37,28 +45,29 @@ def disable_lora_dropout(model):
 disable_lora_dropout(model)
 # Batch processing
 processor_inputs = {
-    "text": [f'{VLM_IMAGE_TOKENS[QWEN2_VL]} Represent the given image with the following question: What is in the image',
-          f'{VLM_IMAGE_TOKENS[QWEN2_VL]} Represent the given image with the following question: What is in the image'],
+    "text": [f'{VLM_IMAGE_TOKENS[LLAVA_QWEN2]} Represent the given image with the following question: What is in the image',
+          f'{VLM_IMAGE_TOKENS[LLAVA_QWEN2]} Represent the given image with the following question: What is in the image'],
     "images": [Image.open('example.jpg'),
             Image.open('example.jpg')],
 }
-inputs = Qwen2_VL_process_fn(
+inputs = FastVLM_process_fn2(
     processor_inputs,
     processor, 
-    square_padding=True)
+    # square_padding=True
+    )
 inputs = batch_to_device(inputs, "cuda")
-with torch.autocast(device_type="cuda", dtype=torch.float16):
+with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
     qry_output = model(qry=inputs)["qry_reps"]
 
 processor_inputs = {
     "text": ['A cat and a dog', 'A cat and a tiger'],
     "images": [None, None],
 }
-inputs = Qwen2_VL_process_fn(
+inputs = FastVLM_process_fn2(
     processor_inputs,
     processor)
 inputs = batch_to_device(inputs, "cuda")
-with torch.autocast(device_type="cuda", dtype=torch.float16):
+with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
     tgt_output = model(tgt=inputs)["tgt_reps"]
 print(model.compute_similarity(qry_output, tgt_output))
 # tensor([[0.3316, 0.2900],
