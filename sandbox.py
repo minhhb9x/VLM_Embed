@@ -12,21 +12,34 @@ torch.backends.cudnn.benchmark = False
 torch.backends.cudnn.deterministic = True
 os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
 
-# model_args = ModelArguments(
-#     model_name='Qwen/Qwen2-VL-2B',
-#     checkpoint_path='TIGER-Lab/VLM2Vec-Qwen2VL-2B',
-#     pooling='last',
-#     normalize=True,
-#     model_backbone='qwen2_vl',
-#     lora=True
-# )
+def get_grid_size(model: MMEBModel, inputs):
+    if model.model_backbone == LLAVA_QWEN2:
+        vision_tower = model.encoder.get_vision_tower()
+        vision_config = vision_tower.config
+        patch_size = vision_config['image_cfg']['patch_size']
+        grid_sizes = []
+        for image in inputs['images']:
+            h, w = image.shape[-2:]
+            grid_h = h // patch_size
+            grid_w = w // patch_size
+            grid_sizes.append((grid_h, grid_w))
+        return grid_sizes
+
 model_args = ModelArguments(
-    model_name='apple/FastVLM-0.5B',
+    model_name='Qwen/Qwen2-VL-2B',
+    checkpoint_path='TIGER-Lab/VLM2Vec-Qwen2VL-2B',
     pooling='last',
     normalize=True,
-    model_backbone=LLAVA_QWEN2,
+    model_backbone='qwen2_vl',
     lora=True
 )
+# model_args = ModelArguments(
+#     model_name='apple/FastVLM-0.5B',
+#     pooling='last',
+#     normalize=True,
+#     model_backbone=LLAVA_QWEN2,
+#     lora=True
+# )
 data_args = DataArguments()
 
 processor = load_processor(model_args, data_args)
@@ -48,27 +61,30 @@ processor_inputs = {
     "text": [f'{VLM_IMAGE_TOKENS[LLAVA_QWEN2]} Represent the given image with the following question: What is in the image',
           f'{VLM_IMAGE_TOKENS[LLAVA_QWEN2]} Represent the given image with the following question: What is in the image'],
     "images": [Image.open('example.jpg'),
-            Image.open('example.jpg')],
+            Image.open('example.jpg').resize((600, 1000))],
 }
 inputs = FastVLM_process_fn(
     processor_inputs,
     processor, 
     # square_padding=True
     )
-inputs = batch_to_device(inputs, "cuda")
-with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
-    qry_output = model(qry=inputs)["qry_reps"]
 
-processor_inputs = {
-    "text": ['A cat and a dog', 'A cat and a tiger'],
-    "images": [None, None],
-}
-inputs = FastVLM_process_fn(
-    processor_inputs,
-    processor)
+# grid_sizes = get_grid_size(model, inputs)
+# print(grid_sizes)
 inputs = batch_to_device(inputs, "cuda")
-with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
-    tgt_output = model(tgt=inputs)["tgt_reps"]
-print(model.compute_similarity(qry_output, tgt_output))
-# tensor([[0.3316, 0.2900],
-#         [0.3286, 0.2879]], device='cuda:0', grad_fn=<MmBackward0>)
+# with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+#     qry_output = model(qry=inputs)["qry_reps"]
+
+
+# processor_inputs = {
+#     "text": ['A cat and a dog', 'A cat and a tiger'],
+#     "images": [None, None],
+# }
+# inputs = FastVLM_process_fn(
+#     processor_inputs,
+#     processor)
+# inputs = batch_to_device(inputs, "cuda")
+# with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+#     tgt_output = model(tgt=inputs)["tgt_reps"]
+# print(model.compute_similarity(qry_output, tgt_output))
+

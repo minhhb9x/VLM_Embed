@@ -341,7 +341,7 @@ class MMEBModel(nn.Module):
                 normalize=model_args.normalize,
                 temperature=model_args.temperature
             )
-
+            setattr(model, 'model_backbone', model_backbone)
             return model
         
         model = cls(
