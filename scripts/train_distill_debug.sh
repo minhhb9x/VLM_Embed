@@ -41,4 +41,6 @@ torchrun --nproc_per_node=$NUM_GPUS_PER_NODE $TRAIN_SCRIPT \
     --warmup_ratio 0.03 \
     --kd_weight 0.3 \
     --kd_loss_type "contrastive_rkd" \
-    --image_resolution "low" 
+    --image_resolution "low" \
+    --projector_config_path "./config/projector_config.json" \
+    --projector_lr 5e-5

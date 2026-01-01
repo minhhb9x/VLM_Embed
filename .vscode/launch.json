@@ -43,8 +43,10 @@
                 "--lr_scheduler_type", "cosine",
                 "--warmup_ratio", "0.03",
                 "--kd_weight", "0.3",
-                "--kd_loss_type", "contrastive_rkd",
-                "--image_resolution", "low"
+                "--kd_loss_type", "vision_rkd",
+                "--image_resolution", "low",
+                "--projector_config_path", "./config/projector_config.json",
+                "--projector_lr", "5e-5"
             ],
             "env": {
                 "CUDA_VISIBLE_DEVICES": "0",

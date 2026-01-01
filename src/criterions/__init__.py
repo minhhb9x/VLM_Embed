@@ -1,3 +1,4 @@
+from src.criterions.vision_RKD import VisionRKDLoss
 from .contrastive_loss_with_RKD import ContrastiveLossWithRKD
 from .proposal_loss_with_DTW import ProposalLossWithDTW
 from .universal_logit_distillation import UniversalLogitDistillation
@@ -12,6 +13,7 @@ criterion_list = {
     "proposal_proj": ProposalLossWithProj,
     "emo_loss": EMOLoss,
     "em_kd": EMKDLoss,
+    "vision_rkd": VisionRKDLoss,
 }
 
 def build_criterion(args):
