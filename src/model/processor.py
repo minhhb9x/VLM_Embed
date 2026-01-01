@@ -462,7 +462,7 @@ def Phi3V_process_fn(model_inputs: dict, processor, max_length=None):
 
     return inputs
 
-def FastVLM_process_fn(model_inputs: dict, processor: FastVLMProcessor, max_length=None, square_padding=False):
+def FastVLM_process_fn(model_inputs: dict, processor: FastVLMProcessor | FastVLMProcessor2 , max_length=None, square_padding=False):
     texts, visual_inputs = model_inputs['text'], model_inputs['images']
     inputs = processor(
         images=visual_inputs,
@@ -470,13 +470,6 @@ def FastVLM_process_fn(model_inputs: dict, processor: FastVLMProcessor, max_leng
     )
     return inputs
 
-def FastVLM_process_fn2(model_inputs: dict, processor: FastVLMProcessor2, max_length=None, square_padding=False):
-    texts, visual_inputs = model_inputs['text'], model_inputs['images']
-    inputs = processor(
-        images=visual_inputs,
-        texts=texts,
-    )
-    return inputs
 
 def Qwen2_VL_process_fn(model_inputs: dict, processor: Qwen2VLProcessor, max_length=None, square_padding=False):
     # TODO: set separate max_len for text/visual inputs, currently max_length is only applied to text-only data

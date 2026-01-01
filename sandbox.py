@@ -1,7 +1,7 @@
 from src.arguments import ModelArguments, DataArguments
 from src.model.model import MMEBModel
 from src.model.processor import load_processor, QWEN2_VL, VLM_IMAGE_TOKENS, Qwen2_VL_process_fn
-from src.model.processor import LLAVA_QWEN2, FastVLM_process_fn, FastVLM_process_fn2
+from src.model.processor import LLAVA_QWEN2, FastVLM_process_fn
 from src.utils import batch_to_device
 from PIL import Image
 import torch
@@ -50,7 +50,7 @@ processor_inputs = {
     "images": [Image.open('example.jpg'),
             Image.open('example.jpg')],
 }
-inputs = FastVLM_process_fn2(
+inputs = FastVLM_process_fn(
     processor_inputs,
     processor, 
     # square_padding=True
@@ -63,7 +63,7 @@ processor_inputs = {
     "text": ['A cat and a dog', 'A cat and a tiger'],
     "images": [None, None],
 }
-inputs = FastVLM_process_fn2(
+inputs = FastVLM_process_fn(
     processor_inputs,
     processor)
 inputs = batch_to_device(inputs, "cuda")
