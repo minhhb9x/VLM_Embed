@@ -1,6 +1,6 @@
 from src.arguments import ModelArguments, DataArguments
 from src.model.model import MMEBModel
-from src.model.processor import load_processor, QWEN2_VL, VLM_IMAGE_TOKENS, Qwen2_VL_process_fn
+from src.model.processor import load_processor, QWEN2_VL, QWEN2_5_VL, VLM_IMAGE_TOKENS, Qwen2_VL_process_fn
 from src.model.processor import LLAVA_QWEN2, FastVLM_process_fn
 from src.utils import batch_to_device
 from PIL import Image
@@ -22,6 +22,16 @@ def get_grid_size(model: MMEBModel, inputs):
             h, w = image.shape[-2:]
             grid_h = h // patch_size
             grid_w = w // patch_size
+            grid_sizes.append((grid_h, grid_w))
+        return grid_sizes
+    elif model.model_backbone in [QWEN2_VL, QWEN2_5_VL]:
+        vision_config = model.config.vision_config
+        merge_size = vision_config.spatial_merge_size
+        grid_sizes = []
+        for shape in inputs['image_grid_thw']:
+            h, w = shape[0, -2:]
+            grid_h = (h // merge_size).item()
+            grid_w = (w // merge_size).item()
             grid_sizes.append((grid_h, grid_w))
         return grid_sizes
 
@@ -58,19 +68,19 @@ def disable_lora_dropout(model):
 disable_lora_dropout(model)
 # Batch processing
 processor_inputs = {
-    "text": [f'{VLM_IMAGE_TOKENS[LLAVA_QWEN2]} Represent the given image with the following question: What is in the image',
-          f'{VLM_IMAGE_TOKENS[LLAVA_QWEN2]} Represent the given image with the following question: What is in the image'],
+    "text": [f'{VLM_IMAGE_TOKENS[QWEN2_VL]} Represent the given image with the following question: What is in the image',
+          f'{VLM_IMAGE_TOKENS[QWEN2_VL]} Represent the given image with the following question: What is in the image'],
     "images": [Image.open('example.jpg'),
             Image.open('example.jpg').resize((600, 1000))],
 }
-inputs = FastVLM_process_fn(
+inputs = Qwen2_VL_process_fn(
     processor_inputs,
     processor, 
     # square_padding=True
     )
 
-# grid_sizes = get_grid_size(model, inputs)
-# print(grid_sizes)
+grid_sizes = get_grid_size(model, inputs)
+print(grid_sizes)
 inputs = batch_to_device(inputs, "cuda")
 # with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
 #     qry_output = model(qry=inputs)["qry_reps"]

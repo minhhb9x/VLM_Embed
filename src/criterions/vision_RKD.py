@@ -5,10 +5,11 @@ import torch.nn.functional as F
 from torch import Tensor
 from scipy.optimize import linear_sum_assignment
 
+from .utils import get_grid_size
 
-class EMKDLoss(nn.Module):
+class VisionRKDLoss(nn.Module):
     def __init__(self, args):
-        super(EMKDLoss, self).__init__()
+        super(VisionRKDLoss, self).__init__()
         self.args = args
         self.loss_fn = nn.CrossEntropyLoss()
         self.kd_loss_weight = self.args.kd_weight
@@ -71,3 +72,21 @@ class EMKDLoss(nn.Module):
         cur_idx_pos_img = 0
         loss_vsd = 0.0
         loss_vlad = 0.0
+
+        for i in range(batch_size):
+            # print(f"Sample {i}: num_text_qry_tokens {num_text_qry_tokens[i]}, num_text_pos_tokens {num_text_pos_tokens[i]}")
+            # print(f"Sample {i} input_ids ids of teacher {teacher_qry_input['input_ids'][i]}, pos {teacher_pos_input['input_ids'][i]}")
+            # print(f"Sample {i} input_ids ids of student {student_qry_input['input_ids'][i]}, pos {student_pos_input['input_ids'][i]}")
+            if student_qry_image_features is not None and teacher_qry_image_features is not None:
+                if cur_idx_qry_img < len(student_qry_image_features) and cur_idx_qry_img < len(teacher_qry_image_features):
+                    if student_qry_image_features[cur_idx_qry_img] is not None and teacher_qry_image_features[cur_idx_qry_img] is not None:
+                        num_tokens_vision_qry_stu = student_qry_image_features[cur_idx_qry_img].size(0)
+                        num_tokens_vision_qry_tea = teacher_qry_image_features[cur_idx_qry_img].size(0)
+                        
+        loss = contrastive_loss
+
+        return {
+            'loss': loss,
+            'contrastive_loss': contrastive_loss,
+            # 'kd_loss': loss_distill
+        }
