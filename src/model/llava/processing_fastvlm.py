@@ -132,7 +132,6 @@ class FastVLMProcessor2(ProcessorMixin):
     def __init__(self, image_processor=None, tokenizer=None, **kwargs):
         self.image_token = "<image>" if not hasattr(tokenizer, "image_token") else tokenizer.image_token
         super().__init__(image_processor, tokenizer, **kwargs)
-        image_processor.do_center_crop = False
         self.patch_size = 64
         
     def __call__(
@@ -144,44 +143,45 @@ class FastVLMProcessor2(ProcessorMixin):
         input_ids = [tokenizer_image_token(text, self.tokenizer, IMAGE_TOKEN_INDEX, return_tensors="pt") for text in texts]
         input_ids = torch.nn.utils.rnn.pad_sequence(input_ids, batch_first=True, padding_value=self.tokenizer.pad_token_id)
         attention_mask = (input_ids != self.tokenizer.pad_token_id).long()
-        shortest_edge = self.image_processor.size['shortest_edge']
+
+        target_longest_edge = 1024
+        patch_size = self.patch_size
         image_tensors = []
+
         for image in images:
             if image is not None: 
                 image = image.convert("RGB")
-                image = self.image_processor.preprocess(image, return_tensors='pt')['pixel_values'][0]
-                _, H, W = image.shape
-                # xác định long / short
-                if H >= W:
-                    long, short = H, W
-                    long_dim = 1
-                else:
-                    long, short = W, H
-                    long_dim = 2
+                W, H = image.size
 
-                # short_edge đã là 1024 → giữ nguyên
-                assert short == 1024, f"Expected short_edge=1024, got {short}"
+                # 1. Tính scale dựa trên cạnh dài nhất
+                scale = target_longest_edge / max(W, H)
+                
+                # 2. Tính kích thước mới thô (raw)
+                raw_new_w = W * scale
+                raw_new_h = H * scale
 
-                # snap xuống bội 64
-                new_long = (long // self.patch_size) * self.patch_size
+                # 3. "Snap" (Làm tròn) kích thước về bội số của patch_size (64)
+                # Dùng hàm round() để lấy bội số gần nhất nhằm giữ tỉ lệ chuẩn nhất có thể
+                new_w = int(round(raw_new_w / patch_size) * patch_size)
+                new_h = int(round(raw_new_h / patch_size) * patch_size)
 
-                # đảm bảo >= 1024
-                new_long = max(new_long, shortest_edge)
+                # Đảm bảo kích thước tối thiểu là 1 patch (tránh lỗi nếu ảnh quá dẹt)
+                new_w = max(new_w, patch_size)
+                new_h = max(new_h, patch_size)
+                
+                # 4. Resize trực tiếp (Không padding)
+                # Ảnh sẽ bị méo cực nhẹ để khớp vào lưới patch_size
+                image = image.resize((new_w, new_h), resample=Image.BICUBIC)
 
-                if new_long != long:
-                    if long_dim == 1:
-                        new_size = (new_long, short)
-                    else:
-                        new_size = (short, new_long)
+                # 5. Preprocess (Chỉ normalize, tắt resize/crop của processor)
+                pixel_values = self.image_processor.preprocess(
+                    image, 
+                    do_resize=False, 
+                    do_center_crop=False, 
+                    return_tensors='pt'
+                )['pixel_values'][0]
 
-                    image = F.interpolate(
-                        image.unsqueeze(0),
-                        size=new_size,
-                        mode="bilinear",
-                        align_corners=False,
-                    ).squeeze(0)
-
-                image_tensors.append(image)
+                image_tensors.append(pixel_values)
         
         if len(image_tensors) == 0: 
             image_tensors = None
