@@ -57,3 +57,10 @@ def get_grid_size(model: MMEBModel, inputs):
             grid_sizes.append((grid_h, grid_w))
         return grid_sizes
 
+def build_center_relative_grid(h, w, device=None, dtype=torch.float32):
+    ys = (torch.arange(h, device=device, dtype=dtype) + 0.5) / h
+    xs = (torch.arange(w, device=device, dtype=dtype) + 0.5) / w
+
+    grid_y, grid_x = torch.meshgrid(ys, xs, indexing="ij")
+    grid = torch.stack([grid_y, grid_x], dim=-1)
+    return grid

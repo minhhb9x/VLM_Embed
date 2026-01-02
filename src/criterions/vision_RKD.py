@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from torch import Tensor
 from scipy.optimize import linear_sum_assignment
 
-from .utils import get_grid_size, get_hidden_text_vision
+from .utils import get_grid_size, get_hidden_text_vision, build_center_relative_grid
 
 class VisionRKDLoss(nn.Module):
     def __init__(self, args):
@@ -27,6 +27,63 @@ class VisionRKDLoss(nn.Module):
         all_tensors[self.process_rank] = t
         all_tensors = torch.cat(all_tensors, dim=0)
         return all_tensors
+    
+    def _process_vision_alignment(self, 
+                              stu_hidden_state, tea_hidden_state,    # Hidden state tại layer cuối của sample i
+                              num_stu_text_tok, num_tea_text_tok,    # Số lượng token text
+                              stu_img_feat, tea_img_feat,            # Tensor vision features cụ thể của ảnh đang xét
+                              stu_grid_size, tea_grid_size,          # Grid size (H, W)
+                              student_backbone, teacher_backbone):   # Backbone config
+    
+        # 1. Lấy kích thước token vision thực tế
+        num_tokens_vision_stu = stu_img_feat.size(0)
+        num_tokens_vision_tea = tea_img_feat.size(0)
+
+        # 2. Tách vision hidden states từ chuỗi sequence (loại bỏ text)
+        _, last_stu_vision_state = get_hidden_text_vision(
+            stu_hidden_state, 
+            num_stu_text_tok, 
+            num_tokens_vision_stu, 
+            student_backbone
+        )
+
+        _, last_tea_vision_state = get_hidden_text_vision(
+            tea_hidden_state, 
+            num_tea_text_tok, 
+            num_tokens_vision_tea, 
+            teacher_backbone
+        )
+
+        # 3. Chuẩn hóa Student
+        last_stu_vision_norm = F.normalize(last_stu_vision_state, p=2, dim=-1) # (N_s, D)
+
+        # 4. Project Teacher sang không gian Student và chuẩn hóa
+        # Lưu ý: self.distiller cần truy cập được từ context này
+        projected_tea_state = self.distiller.projectors["t2s"](last_tea_vision_state)
+        last_tea_vision_norm = F.normalize(projected_tea_state, p=2, dim=-1) # (N_t, D)
+
+        # 5. Tính Cost 2 (Feature Similarity Cost)
+        # 1 - Cosine Similarity
+        c2 = 1.0 - last_stu_vision_norm @ last_tea_vision_norm.T # (N_s, N_t)
+
+        # 6. Xây dựng Grid cho Spatial Cost
+        # Sử dụng device/dtype từ hidden state để đồng bộ
+        stu_grid = build_center_relative_grid(stu_grid_size[0], stu_grid_size[1],
+                                            device=stu_hidden_state.device,
+                                            dtype=stu_hidden_state.dtype).reshape(-1, 2)
+        
+        tea_grid = build_center_relative_grid(tea_grid_size[0], tea_grid_size[1],
+                                            device=tea_hidden_state.device,
+                                            dtype=tea_hidden_state.dtype).reshape(-1, 2)
+
+        # 7. Tính Cost 1 (Spatial/Geometry Cost)
+        c1 = (stu_grid.unsqueeze(1) - tea_grid.unsqueeze(0)).abs().sum(dim=-1) # (N_s, N_t)
+
+        # 8. Tổng hợp Cost và tìm Match
+        total_cost = c1 + 0.01 * c2
+        matched_tea_idx = total_cost.argmin(dim=1) # (N_s,)
+
+
     
     def forward(self, distiller, input_data):
         self.distiller = distiller
@@ -96,35 +153,61 @@ class VisionRKDLoss(nn.Module):
         tea_pos_vision_grid_sizes = get_grid_size(teacher_model, teacher_pos_input)
         
         for i in range(batch_size):
-            # print(f"Sample {i}: num_text_qry_tokens {num_text_qry_tokens[i]}, num_text_pos_tokens {num_text_pos_tokens[i]}")
-            # print(f"Sample {i} input_ids ids of teacher {teacher_qry_input['input_ids'][i]}, pos {teacher_pos_input['input_ids'][i]}")
-            # print(f"Sample {i} input_ids ids of student {student_qry_input['input_ids'][i]}, pos {student_pos_input['input_ids'][i]}")
+            # --- Xử lý QUERY Image ---
             if student_qry_image_features is not None and teacher_qry_image_features is not None:
+                # Kiểm tra index hợp lệ
                 if cur_idx_qry_img < len(student_qry_image_features) and cur_idx_qry_img < len(teacher_qry_image_features):
-                    if student_qry_image_features[cur_idx_qry_img] is not None and teacher_qry_image_features[cur_idx_qry_img] is not None:
-                        num_tokens_vision_qry_stu = student_qry_image_features[cur_idx_qry_img].size(0)
-                        num_tokens_vision_qry_tea = teacher_qry_image_features[cur_idx_qry_img].size(0)
+                    stu_feat = student_qry_image_features[cur_idx_qry_img]
+                    tea_feat = teacher_qry_image_features[cur_idx_qry_img]
+                    
+                    # Kiểm tra feature không phải None
+                    if stu_feat is not None and tea_feat is not None:
+                        results_qry = self._process_vision_alignment(
+                            stu_hidden_state=student_qry_hidden_states[-1][i],
+                            tea_hidden_state=teacher_qry_hidden_states[-1][i],
+                            num_stu_text_tok=num_student_text_qry_tokens[i].item(),
+                            num_tea_text_tok=num_teacher_text_qry_tokens[i].item(),
+                            stu_img_feat=stu_feat,
+                            tea_img_feat=tea_feat,
+                            stu_grid_size=stu_qry_vision_grid_sizes[cur_idx_qry_img],
+                            tea_grid_size=tea_qry_vision_grid_sizes[cur_idx_qry_img],
+                            student_backbone=student_model.model_backbone,
+                            teacher_backbone=teacher_model.model_backbone
+                        )
+                        
+                        # Tại đây bạn có thể dùng results_qry để cộng vào loss_vsd / loss_vlad
+                        # Ví dụ:
+                        # loss_vsd += compute_loss(results_qry['stu_norm'], results_qry['tea_norm'], ...)
+                        
+                        # Tăng index ảnh query
+                        cur_idx_qry_img += 1
 
-                        student_qry_text_hidden_state, last_stu_qry_vision_hidden_state  = get_hidden_text_vision(
-                            student_qry_hidden_states[-1][i], 
-                            num_student_text_qry_tokens[i].item(), 
-                            num_tokens_vision_qry_stu, 
-                            student_model.model_backbone
+            # --- Xử lý POSITIVE Image (Logic y hệt, chỉ thay đổi input) ---
+            if student_pos_image_features is not None and teacher_pos_image_features is not None:
+                if cur_idx_pos_img < len(student_pos_image_features) and cur_idx_pos_img < len(teacher_pos_image_features):
+                    stu_feat_pos = student_pos_image_features[cur_idx_pos_img]
+                    tea_feat_pos = teacher_pos_image_features[cur_idx_pos_img]
+
+                    if stu_feat_pos is not None and tea_feat_pos is not None:
+                        results_pos = self._process_vision_alignment(
+                            stu_hidden_state=student_pos_hidden_states[-1][i],  # Lưu ý dùng pos hidden states
+                            tea_hidden_state=teacher_pos_hidden_states[-1][i],
+                            num_stu_text_tok=num_student_text_pos_tokens[i].item(), # Lưu ý dùng pos tokens count
+                            num_tea_text_tok=num_teacher_text_pos_tokens[i].item(),
+                            stu_img_feat=stu_feat_pos,
+                            tea_img_feat=tea_feat_pos,
+                            stu_grid_size=stu_pos_vision_grid_sizes[cur_idx_pos_img], # Lưu ý dùng pos grid size
+                            tea_grid_size=tea_pos_vision_grid_sizes[cur_idx_pos_img],
+                            student_backbone=student_model.model_backbone,
+                            teacher_backbone=teacher_model.model_backbone
                         )
 
-                        teacher_qry_text_hidden_state, last_tea_qry_vision_hidden_state  = get_hidden_text_vision(
-                            teacher_qry_hidden_states[-1][i], 
-                            num_teacher_text_qry_tokens[i].item(), 
-                            num_tokens_vision_qry_tea, 
-                            teacher_model.model_backbone
-                        )
+                        # Cộng loss cho phần Pos
+                        # loss_vsd += compute_loss(results_pos['stu_norm'], ...)
 
-                        last_stu_qry_vision_hidden_state_norm = F.normalize(last_stu_qry_vision_hidden_state, p=2, dim=-1) # (N_s, D)
+                        # Tăng index ảnh pos
+                        cur_idx_pos_img += 1
 
-                        projected_last_tea_qry_vision_hidden_state = self.distiller.projectors["t2s"](last_tea_qry_vision_hidden_state) # (N_t, D)
-                        last_tea_qry_vision_hidden_state_norm = F.normalize(projected_last_tea_qry_vision_hidden_state, p=2, dim=-1) # (N_t, D)
-
-                        c2 = 1.0 - last_stu_qry_vision_hidden_state_norm @ last_tea_qry_vision_hidden_state_norm.T # (N_s, N_t)
 
         loss = contrastive_loss
 

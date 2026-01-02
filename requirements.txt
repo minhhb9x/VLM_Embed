@@ -27,3 +27,4 @@ deepspeed==0.17.6
 numba
 tslearn
 gpustat
+matplotlib
