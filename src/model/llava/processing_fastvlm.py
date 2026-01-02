@@ -133,6 +133,7 @@ class FastVLMProcessor2(ProcessorMixin):
         self.image_token = "<image>" if not hasattr(tokenizer, "image_token") else tokenizer.image_token
         super().__init__(image_processor, tokenizer, **kwargs)
         image_processor.do_center_crop = False
+        self.patch_size = 64
         
     def __call__(
         self, 
@@ -161,8 +162,11 @@ class FastVLMProcessor2(ProcessorMixin):
                 # short_edge đã là 1024 → giữ nguyên
                 assert short == 1024, f"Expected short_edge=1024, got {short}"
 
-                # snap long_edge lên bội 16
-                new_long = math.ceil(long / 16) * 16
+                # snap xuống bội 64
+                new_long = (long // self.patch_size) * self.patch_size
+
+                # đảm bảo >= 1024
+                new_long = max(new_long, shortest_edge)
 
                 if new_long != long:
                     if long_dim == 1:

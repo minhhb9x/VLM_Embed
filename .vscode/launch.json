@@ -2,17 +2,14 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debug FastVLM Distill (Torchrun)",
+            "name": "Debug FastVLM Distill (Python)",
             "type": "debugpy",
             "request": "launch",
-            "module": "torch.distributed.run",
+            "program": "${workspaceFolder}/train_distill_no_deepspeed.py",
             "console": "integratedTerminal",
-            "justMyCode": false,
+            "justMyCode": true,
             "cwd": "${workspaceFolder}",
             "args": [
-                "--nproc_per_node=1",
-                "--nnodes=1",
-                "train_distill_no_deepspeed.py",
                 "--model_name", "apple/FastVLM-0.5B",
                 "--teacher_model_name", "raghavlite/B3_Qwen2_2B",
                 "--lora", "True",

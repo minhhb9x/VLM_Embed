@@ -7,7 +7,7 @@
             "request": "launch",
             "module": "torch.distributed.run",
             "console": "integratedTerminal",
-            "justMyCode": false,
+            "justMyCode": true,
             "cwd": "${workspaceFolder}",
             "args": [
                 "--nproc_per_node=1",

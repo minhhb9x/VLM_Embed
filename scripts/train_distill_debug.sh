@@ -9,7 +9,8 @@ TRAIN_SCRIPT="train_distill_no_deepspeed.py"
 # =========================================================================
 # Dùng torchrun để khởi chạy
 # =========================================================================
-torchrun --nproc_per_node=$NUM_GPUS_PER_NODE $TRAIN_SCRIPT \
+# torchrun --nproc_per_node=$NUM_GPUS_PER_NODE $TRAIN_SCRIPT \
+python $TRAIN_SCRIPT \
     --model_name "apple/FastVLM-0.5B" \
     --teacher_model_name "raghavlite/B3_Qwen2_2B" \
     --lora True \
@@ -24,7 +25,7 @@ torchrun --nproc_per_node=$NUM_GPUS_PER_NODE $TRAIN_SCRIPT \
     --subset_name "VOC2007" "OK-VQA" \
     --dataset_split "original" \
     --image_dir "vlm2vec_train/MMEB-train" \
-    --output_dir "training/RKD" \
+    --output_dir "training/vision_RKD" \
     --per_device_train_batch_size 2 \
     --gradient_accumulation_steps 1 \
     --learning_rate 1e-5 \
@@ -40,7 +41,7 @@ torchrun --nproc_per_node=$NUM_GPUS_PER_NODE $TRAIN_SCRIPT \
     --lr_scheduler_type "cosine" \
     --warmup_ratio 0.03 \
     --kd_weight 0.3 \
-    --kd_loss_type "contrastive_rkd" \
+    --kd_loss_type "vision_rkd" \
     --image_resolution "low" \
     --projector_config_path "./config/projector_config.json" \
     --projector_lr 5e-5

@@ -28,7 +28,8 @@ class VisionRKDLoss(nn.Module):
         all_tensors = torch.cat(all_tensors, dim=0)
         return all_tensors
     
-    def _process_vision_alignment(self, 
+    def _vision_alignment_loss(self, 
+                              student_reps, teacher_reps,            # Vector embedding eos
                               stu_hidden_state, tea_hidden_state,    # Hidden state tại layer cuối của sample i
                               num_stu_text_tok, num_tea_text_tok,    # Số lượng token text
                               stu_img_feat, tea_img_feat,            # Tensor vision features cụ thể của ảnh đang xét
@@ -54,20 +55,12 @@ class VisionRKDLoss(nn.Module):
             teacher_backbone
         )
 
-        # 3. Chuẩn hóa Student
         last_stu_vision_norm = F.normalize(last_stu_vision_state, p=2, dim=-1) # (N_s, D)
-
-        # 4. Project Teacher sang không gian Student và chuẩn hóa
-        # Lưu ý: self.distiller cần truy cập được từ context này
         projected_tea_state = self.distiller.projectors["t2s"](last_tea_vision_state)
         last_tea_vision_norm = F.normalize(projected_tea_state, p=2, dim=-1) # (N_t, D)
 
-        # 5. Tính Cost 2 (Feature Similarity Cost)
-        # 1 - Cosine Similarity
         c2 = 1.0 - last_stu_vision_norm @ last_tea_vision_norm.T # (N_s, N_t)
 
-        # 6. Xây dựng Grid cho Spatial Cost
-        # Sử dụng device/dtype từ hidden state để đồng bộ
         stu_grid = build_center_relative_grid(stu_grid_size[0], stu_grid_size[1],
                                             device=stu_hidden_state.device,
                                             dtype=stu_hidden_state.dtype).reshape(-1, 2)
@@ -76,21 +69,43 @@ class VisionRKDLoss(nn.Module):
                                             device=tea_hidden_state.device,
                                             dtype=tea_hidden_state.dtype).reshape(-1, 2)
 
-        # 7. Tính Cost 1 (Spatial/Geometry Cost)
         c1 = (stu_grid.unsqueeze(1) - tea_grid.unsqueeze(0)).abs().sum(dim=-1) # (N_s, N_t)
 
-        # 8. Tổng hợp Cost và tìm Match
         total_cost = c1 + 0.01 * c2
         matched_tea_idx = total_cost.argmin(dim=1) # (N_s,)
+        matched_last_tea_tea_vision_state = last_tea_vision_state[matched_tea_idx, :] # (N_s, )
+
+        if student_reps.dim() == 1: student_reps = student_reps.unsqueeze(0)
+        if teacher_reps.dim() == 1: teacher_reps = teacher_reps.unsqueeze(0)
+
+        e_stu = last_stu_vision_state - student_reps  
+        e_tea = matched_last_tea_tea_vision_state - teacher_reps
+
+        e_stu_norm = F.normalize(e_stu, p=2, dim=1)
+        e_tea_norm = F.normalize(e_tea, p=2, dim=1)
+
+        cos_matrix_stu = torch.matmul(e_stu_norm, e_stu_norm.t())
+        cos_matrix_tea = torch.matmul(e_tea_norm, e_tea_norm.t())
+
+        huber_loss = nn.HuberLoss(delta=1.0, reduction='mean')
+        angle_loss = huber_loss(cos_matrix_stu, cos_matrix_tea.detach())
+
+        return angle_loss
 
 
-    
     def forward(self, distiller, input_data):
         self.distiller = distiller
         student_model = distiller.student
         teacher_model = distiller.teacher
-        student_processor = distiller.get_student_processor()
-        teacher_processor = distiller.get_teacher_processor()
+        
+        if getattr(self, "student_processor", None) is None:
+            self.student_processor = distiller.get_student_processor()
+        if getattr(self, "teacher_processor", None) is None:
+            self.teacher_processor = distiller.get_teacher_processor()
+
+        student_processor = self.student_processor
+        teacher_processor = self.teacher_processor
+
         student_tokenizer = student_processor.tokenizer
         teacher_tokenizer = teacher_processor.tokenizer
         
@@ -130,8 +145,7 @@ class VisionRKDLoss(nn.Module):
         loss_distill = 0.0
         cur_idx_qry_img = 0
         cur_idx_pos_img = 0
-        loss_vsd = 0.0
-        loss_vlad = 0.0
+
 
         student_special_ids = torch.tensor(student_tokenizer.all_special_ids, device=student_qry_input['input_ids'].device)
         teacher_special_ids = torch.tensor(teacher_tokenizer.all_special_ids, device=teacher_qry_input['input_ids'].device)
@@ -162,7 +176,9 @@ class VisionRKDLoss(nn.Module):
                     
                     # Kiểm tra feature không phải None
                     if stu_feat is not None and tea_feat is not None:
-                        results_qry = self._process_vision_alignment(
+                        vision_rkd_loss = self._vision_alignment_loss(
+                            student_reps=student_qry_reps[i],
+                            teacher_reps=teacher_qry_reps[i],
                             stu_hidden_state=student_qry_hidden_states[-1][i],
                             tea_hidden_state=teacher_qry_hidden_states[-1][i],
                             num_stu_text_tok=num_student_text_qry_tokens[i].item(),
@@ -174,22 +190,18 @@ class VisionRKDLoss(nn.Module):
                             student_backbone=student_model.model_backbone,
                             teacher_backbone=teacher_model.model_backbone
                         )
-                        
-                        # Tại đây bạn có thể dùng results_qry để cộng vào loss_vsd / loss_vlad
-                        # Ví dụ:
-                        # loss_vsd += compute_loss(results_qry['stu_norm'], results_qry['tea_norm'], ...)
-                        
-                        # Tăng index ảnh query
+                        loss_distill += vision_rkd_loss
                         cur_idx_qry_img += 1
 
-            # --- Xử lý POSITIVE Image (Logic y hệt, chỉ thay đổi input) ---
             if student_pos_image_features is not None and teacher_pos_image_features is not None:
                 if cur_idx_pos_img < len(student_pos_image_features) and cur_idx_pos_img < len(teacher_pos_image_features):
                     stu_feat_pos = student_pos_image_features[cur_idx_pos_img]
                     tea_feat_pos = teacher_pos_image_features[cur_idx_pos_img]
 
                     if stu_feat_pos is not None and tea_feat_pos is not None:
-                        results_pos = self._process_vision_alignment(
+                        vision_rkd_loss = self._vision_alignment_loss(
+                            student_reps=student_pos_reps[i],
+                            teacher_reps=teacher_pos_reps[i],
                             stu_hidden_state=student_pos_hidden_states[-1][i],  # Lưu ý dùng pos hidden states
                             tea_hidden_state=teacher_pos_hidden_states[-1][i],
                             num_stu_text_tok=num_student_text_pos_tokens[i].item(), # Lưu ý dùng pos tokens count
@@ -201,18 +213,14 @@ class VisionRKDLoss(nn.Module):
                             student_backbone=student_model.model_backbone,
                             teacher_backbone=teacher_model.model_backbone
                         )
-
-                        # Cộng loss cho phần Pos
-                        # loss_vsd += compute_loss(results_pos['stu_norm'], ...)
-
-                        # Tăng index ảnh pos
+                        loss_distill += vision_rkd_loss
                         cur_idx_pos_img += 1
-
-
-        loss = contrastive_loss
+        
+        loss_distill = loss_distill / (cur_idx_qry_img + cur_idx_pos_img + 1e-8) # mean loss over proceesed images
+        loss = contrastive_loss + loss_distill * self.kd_loss_weight
 
         return {
             'loss': loss,
             'contrastive_loss': contrastive_loss,
-            # 'kd_loss': loss_distill
+            'kd_loss': loss_distill
         }
