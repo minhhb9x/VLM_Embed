@@ -55,11 +55,16 @@ class VisionRKDLoss(nn.Module):
             teacher_backbone
         )
 
-        last_stu_vision_norm = F.normalize(last_stu_vision_state, p=2, dim=-1) # (N_s, D)
-        projected_tea_state = self.distiller.projectors["t2s"](last_tea_vision_state)
-        last_tea_vision_norm = F.normalize(projected_tea_state, p=2, dim=-1) # (N_t, D)
+        if student_reps.dim() == 1: student_reps = student_reps.unsqueeze(0) # (1, D)
+        if teacher_reps.dim() == 1: teacher_reps = teacher_reps.unsqueeze(0) # (1, D)
 
-        c2 = 1.0 - last_stu_vision_norm @ last_tea_vision_norm.T # (N_s, N_t)
+        last_stu_vision_norm = F.normalize(last_stu_vision_state, p=2, dim=-1) # (N_s, D)
+        last_tea_vision_norm = F.normalize(last_tea_vision_state, p=2, dim=-1) # (N_t, D)
+
+        last_stu_vision_eos_sim = last_stu_vision_norm @ F.normalize(student_reps, p=2, dim=-1).T  # (N_s, 1)
+        last_tea_vision_eos_sim = last_tea_vision_norm @ F.normalize(teacher_reps, p=2, dim=-1).T  # (N_t, 1)
+
+        c2 = (last_stu_vision_eos_sim - last_tea_vision_eos_sim.T).abs()  # (N_s, N_t)
 
         stu_grid = build_center_relative_grid(stu_grid_size[0], stu_grid_size[1],
                                             device=stu_hidden_state.device,
@@ -75,17 +80,15 @@ class VisionRKDLoss(nn.Module):
         matched_tea_idx = total_cost.argmin(dim=1) # (N_s,)
         matched_last_tea_tea_vision_state = last_tea_vision_state[matched_tea_idx, :] # (N_s, )
 
-        if student_reps.dim() == 1: student_reps = student_reps.unsqueeze(0)
-        if teacher_reps.dim() == 1: teacher_reps = teacher_reps.unsqueeze(0)
 
-        e_stu = last_stu_vision_state - student_reps  
-        e_tea = matched_last_tea_tea_vision_state - teacher_reps
+        e_stu = last_stu_vision_state - student_reps  # (N_s, D)
+        e_tea = matched_last_tea_tea_vision_state - teacher_reps # (N_s, D)
 
-        e_stu_norm = F.normalize(e_stu, p=2, dim=1)
-        e_tea_norm = F.normalize(e_tea, p=2, dim=1)
+        e_stu_norm = F.normalize(e_stu, p=2, dim=1) # (N_s, D)
+        e_tea_norm = F.normalize(e_tea, p=2, dim=1) # (N_s, D)
 
-        cos_matrix_stu = torch.matmul(e_stu_norm, e_stu_norm.t())
-        cos_matrix_tea = torch.matmul(e_tea_norm, e_tea_norm.t())
+        cos_matrix_stu = torch.matmul(e_stu_norm, e_stu_norm.t()) # (N_s, N_s)
+        cos_matrix_tea = torch.matmul(e_tea_norm, e_tea_norm.t()) # (N_s, N_s)
 
         huber_loss = nn.HuberLoss(delta=1.0, reduction='mean')
         angle_loss = huber_loss(cos_matrix_stu, cos_matrix_tea.detach())
