@@ -76,7 +76,10 @@ class VisionRKDLoss(nn.Module):
 
         c1 = (stu_grid.unsqueeze(1) - tea_grid.unsqueeze(0)).abs().sum(dim=-1) # (N_s, N_t)
 
-        total_cost = c1 + 0.01 * c2
+        c1 = (c1 - c1.min()) / (c1.max() - c1.min() + 1e-6)
+        c2 = (c2 - c2.min()) / (c2.max() - c2.min() + 1e-6)
+
+        total_cost = c1 + 0.001 * c2
         matched_tea_idx = total_cost.argmin(dim=1) # (N_s,)
         matched_last_tea_tea_vision_state = last_tea_vision_state[matched_tea_idx, :] # (N_s, )
 
