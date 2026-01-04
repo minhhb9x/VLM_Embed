@@ -124,6 +124,10 @@ def finetune(
         'step_time': []
     }
     
+    if accelerator.is_main_process:
+        # config=vars(training_args) giúp lưu lại các tham số hyperparams lên wandb
+        accelerator.init_trackers("VLM_Embed_distill", config=vars(training_args))
+
     for epoch in range(training_args.num_train_epochs):
         logging_output['epoch'] = epoch + 1
         print_rank("Start iteration of epoch {}".format(epoch + 1))
@@ -204,7 +208,7 @@ def finetune(
             epoch_kd_loss += sum(kd_losses)
             
             if accelerator.is_main_process and step % training_args.logging_steps == 0:
-                progress_bar.set_postfix({
+                logging = {
                     "loss": f"{batch_loss:.4f}",
                     "contrastive_loss": f"{batch_contrastive_loss:.4f}",
                     "kd_loss": f"{batch_kd_loss:.4f}",
@@ -212,9 +216,10 @@ def finetune(
                     "kd_loss_rkd": f"{batch_kd_rkd_loss:.4f}",
                     "kd_loss_dtw": f"{batch_kd_dtw_loss:.4f}",
                     "ot_loss": f"{batch_ot_loss:.4f}",
-                })
+                }
+                progress_bar.set_postfix(logging)
                 progress_bar.update(1)
-                    
+                accelerator.log(logging, step=step)
                     
         # End of epoch
         if accelerator.is_main_process:
@@ -255,6 +260,7 @@ def finetune(
                 except Exception as e:
                     print_rank(f"Error saving processor: {e}. No processor saved.")
         print_rank(f"Epoch {epoch + 1} finished.")
+
     total_time = time.time() - start_time
     print_rank(f"Training completed in {total_time/3600:.2f} hours")
     
@@ -285,7 +291,7 @@ def finetune(
             student_config.save_pretrained(final_ckpt_dir)
             tokenizer.save_pretrained(final_ckpt_dir)
 
-
+    accelerator.end_training()
     return logging_output
 
 def main():
