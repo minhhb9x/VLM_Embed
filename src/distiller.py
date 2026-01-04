@@ -138,13 +138,19 @@ class Distiller(nn.Module):
         return teacher
     
     def get_student_processor(self):
+        if hasattr(self, 'student_processor'):
+            return self.student_processor
         processor = load_processor(self.model_args, None)
+        setattr(self, 'student_processor', processor)
         print("Student processor loaded.")
         return processor
 
     def get_teacher_processor(self):
+        if hasattr(self, 'teacher_processor'):
+            return self.teacher_processor
         model_args = self._create_model_args('teacher')
         processor = load_processor(model_args, None)
+        setattr(self, 'teacher_processor', processor)
         print("Teacher processor loaded.")
         return processor
     

@@ -208,7 +208,7 @@ def finetune(
             epoch_kd_loss += sum(kd_losses)
             
             if accelerator.is_main_process and step % training_args.logging_steps == 0:
-                logging = {
+                progress_bar.set_postfix({
                     "loss": f"{batch_loss:.4f}",
                     "contrastive_loss": f"{batch_contrastive_loss:.4f}",
                     "kd_loss": f"{batch_kd_loss:.4f}",
@@ -216,10 +216,17 @@ def finetune(
                     "kd_loss_rkd": f"{batch_kd_rkd_loss:.4f}",
                     "kd_loss_dtw": f"{batch_kd_dtw_loss:.4f}",
                     "ot_loss": f"{batch_ot_loss:.4f}",
-                }
-                progress_bar.set_postfix(logging)
+                })
                 progress_bar.update(1)
-                accelerator.log(logging, step=step)
+                accelerator.log({
+                    "train/loss": batch_loss,
+                    "train/contrastive_loss": batch_contrastive_loss,
+                    "train/kd_loss": batch_kd_loss,
+                    "train/learning_rate": optimizer.param_groups[0]['lr'],
+                    "train/kd_loss_rkd": batch_kd_rkd_loss,
+                    "train/kd_loss_dtw": batch_kd_dtw_loss,
+                    "train/ot_loss": batch_ot_loss,
+                }, step=step)
                     
         # End of epoch
         if accelerator.is_main_process:

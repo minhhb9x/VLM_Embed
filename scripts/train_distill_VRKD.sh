@@ -6,11 +6,21 @@ NUM_GPUS_PER_NODE=1
 # Đường dẫn tới file script training của bạn
 TRAIN_SCRIPT="train_distill_no_deepspeed.py"
 
+# SUBSETS=(
+#   "VOC2007"
+#   "OK-VQA"
+# )
+
+SUBSETS=(
+  "ImageNet_1K" "N24News" "HatefulMemes" "VOC2007" "SUN397"
+#   "OK-VQA" "A-OKVQA" "DocVQA" "InfographicsVQA" "ChartQA"
+)
+
 # =========================================================================
 # Dùng torchrun để khởi chạy
 # =========================================================================
-# torchrun --nproc_per_node=$NUM_GPUS_PER_NODE $TRAIN_SCRIPT \
-python $TRAIN_SCRIPT \
+torchrun --nproc_per_node=$NUM_GPUS_PER_NODE \
+    $TRAIN_SCRIPT \
     --model_name "apple/FastVLM-0.5B" \
     --teacher_model_name "raghavlite/B3_Qwen2_2B" \
     --lora True \
@@ -22,12 +32,11 @@ python $TRAIN_SCRIPT \
     --model_backbone "llava_qwen2" \
     --pooling "eos" \
     --dataset_name "TIGER-Lab/MMEB-train" \
-    --subset_name "VOC2007" "OK-VQA" \ 
-    # --subset_name "ImageNet_1K" "N24News" "HatefulMemes" "VOC2007" "SUN397" "OK-VQA" "A-OKVQA" "DocVQA" "InfographicsVQA" "ChartQA" "Visual7W" "VisDial" "CIRR" "VisualNews_t2i" "VisualNews_i2t" "MSCOCO_i2t" "MSCOCO_t2i" "NIGHTS" "WebQA" "MSCOCO" \
+    --subset_name "${SUBSETS[@]}" \
     --dataset_split "original" \
     --image_dir "vlm2vec_train/MMEB-train" \
     --output_dir "training/VRKD" \
-    --per_device_train_batch_size 2 \
+    --per_device_train_batch_size 8 \
     --gradient_accumulation_steps 1 \
     --learning_rate 1e-5 \
     --num_train_epochs 1 \
