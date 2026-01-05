@@ -291,14 +291,16 @@ def finetune(
             student_config = AutoConfig.from_pretrained(model_args.model_name)
             tokenizer = AutoTokenizer.from_pretrained(model_args.model_name)
             try:
-                processor = AutoProcessor.from_pretrained(model_args.model_name)
+                processor = distiller.get_student_processor()
                 processor.save_pretrained(final_ckpt_dir)
             except Exception as e:
-                print_rank(f"Error saving processor: {e}. Try to save self-defined processor instead.")
+                print_rank(f"Error saving student processor: {e}. Fallback to base processor.")
                 try:
-                    distiller.get_student_processor().save_pretrained(final_ckpt_dir)
+                    processor = AutoProcessor.from_pretrained(model_args.model_name)
+                    processor.save_pretrained(final_ckpt_dir)
                 except Exception as e:
-                    print_rank(f"Error saving self-defined processor: {e}. No processor saved.")
+                    print_rank(f"Error saving base processor: {e}. No processor saved.")
+
             student_config.save_pretrained(final_ckpt_dir)
             tokenizer.save_pretrained(final_ckpt_dir)
 
