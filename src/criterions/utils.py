@@ -7,24 +7,24 @@ from src.model.processor import LLAVA_NEXT, QWEN2_VL, PHI3V, print_master, QWEN2
     COLPALI, INTERN_VL3, LLAVA_ONEVISION, LLAVA_QWEN2
 
 
-def get_hidden_text_vision(hidden_state, num_text_token, num_vision_token, model_backbone):
+def get_hidden_text_vision(hidden_state, num_text_token, num_vision_token, attention_mask):
     '''
     Get hidden states for text and vision tokens separately
     Args:
         hidden_state: tensor, the output hidden states from the model
         num_text_token: int, number of text tokens
         num_vision_token: int, number of vision tokens
-        model_backbone: str, the model backbone type
+        attention_mask: tensor, the attention mask indicating valid tokens # [Sequence length]
         (note: only )
     '''
-    if model_backbone in [QWEN2_VL, QWEN2_5_VL, QWEN2_VL_TOKENSELECTION]: # left padding
+    left_padding = attention_mask[0] == 0 and attention_mask[-1] == 1
+    if left_padding:
         vision_hidden_state = hidden_state[-(num_vision_token+num_text_token): -num_text_token, :]
         text_hidden_state = hidden_state[-num_text_token:, :]
-    elif model_backbone == LLAVA_QWEN2: # right padding
+    else:
         vision_hidden_state = hidden_state[:num_vision_token, :]
         text_hidden_state = hidden_state[num_vision_token: num_vision_token + num_text_token, :]
-    else:
-        raise NotImplementedError(f"get_hidden_text_vision not implemented for model_backbone {model_backbone}")
+   
     return text_hidden_state, vision_hidden_state
 
 def get_grid_size(model: MMEBModel, inputs):

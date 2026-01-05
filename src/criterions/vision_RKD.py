@@ -34,7 +34,7 @@ class VisionRKDLoss(nn.Module):
                               num_stu_text_tok, num_tea_text_tok,    # Số lượng token text
                               stu_img_feat, tea_img_feat,            # Tensor vision features cụ thể của ảnh đang xét
                               stu_grid_size, tea_grid_size,          # Grid size (H, W)
-                              student_backbone, teacher_backbone):   # Backbone config
+                              stu_attention_mask, tea_attention_mask):   # Attention masks
     
         # 1. Lấy kích thước token vision thực tế
         num_tokens_vision_stu = stu_img_feat.size(0)
@@ -45,14 +45,14 @@ class VisionRKDLoss(nn.Module):
             stu_hidden_state, 
             num_stu_text_tok, 
             num_tokens_vision_stu, 
-            student_backbone
+            attention_mask=stu_attention_mask
         )
 
         _, last_tea_vision_state = get_hidden_text_vision(
             tea_hidden_state, 
             num_tea_text_tok, 
             num_tokens_vision_tea, 
-            teacher_backbone
+            attention_mask=tea_attention_mask
         )
 
         if student_reps.dim() == 1: student_reps = student_reps.unsqueeze(0) # (1, D)
@@ -193,8 +193,8 @@ class VisionRKDLoss(nn.Module):
                             tea_img_feat=tea_feat,
                             stu_grid_size=stu_qry_vision_grid_sizes[cur_idx_qry_img],
                             tea_grid_size=tea_qry_vision_grid_sizes[cur_idx_qry_img],
-                            student_backbone=student_model.model_backbone,
-                            teacher_backbone=teacher_model.model_backbone
+                            stu_attention_mask=student_qry_input['attention_mask'][i],
+                            tea_attention_mask=teacher_qry_input['attention_mask'][i]
                         )
                         loss_distill += vision_rkd_loss
                         cur_idx_qry_img += 1
@@ -216,8 +216,8 @@ class VisionRKDLoss(nn.Module):
                             tea_img_feat=tea_feat_pos,
                             stu_grid_size=stu_pos_vision_grid_sizes[cur_idx_pos_img], # Lưu ý dùng pos grid size
                             tea_grid_size=tea_pos_vision_grid_sizes[cur_idx_pos_img],
-                            student_backbone=student_model.model_backbone,
-                            teacher_backbone=teacher_model.model_backbone
+                            stu_attention_mask=student_pos_input['attention_mask'][i],
+                            tea_attention_mask=teacher_pos_input['attention_mask'][i]
                         )
                         loss_distill += vision_rkd_loss
                         cur_idx_pos_img += 1
