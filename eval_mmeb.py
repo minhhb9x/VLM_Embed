@@ -4,6 +4,10 @@ from collections import OrderedDict
 from contextlib import contextmanager
 import time
 
+# ### MODIFIED: Import wandb
+import wandb
+import dataclasses
+
 from src.arguments import ModelArguments, DataArguments, TrainingArguments
 from transformers import HfArgumentParser, AutoConfig
 
@@ -80,6 +84,24 @@ def main():
     model_args: ModelArguments
     data_args: DataArguments
     training_args: TrainingArguments
+    
+    # ### MODIFIED: Khởi tạo wandb (chỉ trên main process để tránh bị duplicate logs nếu chạy multi-gpu)
+    is_main_process = training_args.local_rank in [-1, 0]
+    if is_main_process:
+        # Chuyển dataclass thành dict để log config
+        config_dict = {}
+        config_dict.update(dataclasses.asdict(model_args))
+        config_dict.update(dataclasses.asdict(data_args))
+        # Tạo tên run dựa trên model và backbone
+        run_name = f"{model_args.model_name.split('/')[-1] if model_args.model_name else 'MMEB'}"
+        
+        wandb.init(
+            project="MMEB_Evaluation",  # Đặt tên project của bạn trên wandb
+            name=run_name,
+            config=config_dict,
+            reinit=True
+        )
+
     os.makedirs(data_args.encode_output_path, exist_ok=True)
 
     hf_config = AutoConfig.from_pretrained(model_args.model_name, trust_remote_code=True)
@@ -177,15 +199,28 @@ def main():
             with open(encode_tgt_path, 'wb') as f:
                 pickle.dump((encoded_tensor, eval_tgt_dataset.paired_data), f)
 
+    # -------------------------------------------------------------------------
+    # SCORE CALCULATION & WANDB LOGGING LOOP
+    # -------------------------------------------------------------------------
     for subset in tqdm(data_args.subset_name, desc="Iterate datasets to calculate scores"):
         print(f"\033[91m{subset}: Calculating score now!\033[0m")
         score_path = os.path.join(data_args.encode_output_path, f"{subset}_score.json")
+        
+        # ### MODIFIED: Handle Cached Results for Wandb
         if os.path.exists(score_path):
             try:
                 with open(score_path, "r") as f:
                     score_dict = json.load(f)
                 print(f"Found previous eval score, skipping {subset}")
                 print(score_dict)
+                
+                # Log cached result to wandb
+                if is_main_process:
+                    wandb.log({
+                        f"{subset}/acc": score_dict.get("acc", 0),
+                        f"{subset}/num_correct": score_dict.get("num_correct", 0),
+                        f"Average/acc": score_dict.get("acc", 0) # Log này sẽ bị override nhưng giúp xem chart tổng quát
+                    })
                 continue
             except Exception as e:
                 pass
@@ -281,9 +316,11 @@ def main():
                 if pred == 0:
                     n_correct += 1
                 all_pred.append(all_candidates[pred])
+        
         score_path = os.path.join(data_args.encode_output_path, f"{subset}_score.json")
-        print(f"\033[91m{subset} accuracy: {n_correct/len(eval_data)}\033[0m")
-        score_dict = {"acc": n_correct/len(eval_data), "num_correct": n_correct, "num_pred": len(eval_data),
+        acc = n_correct/len(eval_data)
+        print(f"\033[91m{subset} accuracy: {acc}\033[0m")
+        score_dict = {"acc": acc, "num_correct": n_correct, "num_pred": len(eval_data),
                       "num_pred": len(all_pred), "num_data": len(eval_data)}
         print(score_dict)
         print(f"Outputting final score to: {score_path}")
@@ -292,6 +329,17 @@ def main():
         with open(os.path.join(data_args.encode_output_path, f"{subset}_pred.txt"), "w") as f:
             for item in all_pred:
                 f.write(f"{item}\n")
+        
+        # ### MODIFIED: Log result to wandb
+        if is_main_process:
+            wandb.log({
+                f"{subset}/acc": acc,
+                f"{subset}/num_correct": n_correct,
+            })
+    
+    # ### MODIFIED: Finish wandb run
+    if is_main_process:
+        wandb.finish()
 
 
 if __name__ == "__main__":

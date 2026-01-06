@@ -17,7 +17,7 @@ scikit-learn
 scikit-image
 qwen_vl_utils
 ray
-timm
+timm==0.9.12
 sentencepiece
 opencv-python
 decord

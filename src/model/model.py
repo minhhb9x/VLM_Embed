@@ -415,6 +415,16 @@ class MMEBModel(nn.Module):
         elif model_args.model_backbone == COLPALI:
             base_model = ColPali.from_pretrained(model_args.model_name)
             setattr(base_model, 'config', config)
+        elif model_args.model_backbone == LLAVA_QWEN2:
+            config._attn_implementation = "eager"
+            base_model = LlavaQwen2ForCausalLM.from_pretrained(
+                model_args.model_name,
+                low_cpu_mem_usage=True,
+                torch_dtype=torch.bfloat16,
+                config=config,
+                # **kwargs
+            )
+            setattr(base_model, 'config', config)
         else:
             # Loading external base model from HF
             config = AutoConfig.from_pretrained(model_args.model_name, trust_remote_code=True)
