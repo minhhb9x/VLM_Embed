@@ -28,7 +28,7 @@ python $TRAIN_SCRIPT \
     --output_dir "training/vision_RKD" \
     --per_device_train_batch_size 2 \
     --gradient_accumulation_steps 1 \
-    --learning_rate 1e-5 \
+    --learning_rate 1e-4 \
     --num_train_epochs 1 \
     --bf16 \
     --save_total_limit 2 \
@@ -44,4 +44,4 @@ python $TRAIN_SCRIPT \
     --kd_loss_type "vision_rkd" \
     --image_resolution "low" \
     --projector_config_path "./config/projector_config.json" \
-    --projector_lr 5e-5
+    --projector_lr 5e-4
