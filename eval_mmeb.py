@@ -81,26 +81,36 @@ def main():
             sys.argv.append(rank)
     parser = HfArgumentParser((ModelArguments, DataArguments, TrainingArguments))
     model_args, data_args, training_args = parser.parse_args_into_dataclasses()
-    model_args: ModelArguments
-    data_args: DataArguments
-    training_args: TrainingArguments
-    
-    # ### MODIFIED: Khởi tạo wandb (chỉ trên main process để tránh bị duplicate logs nếu chạy multi-gpu)
+   
+    use_wandb = False
     is_main_process = training_args.local_rank in [-1, 0]
     if is_main_process:
-        # Chuyển dataclass thành dict để log config
-        config_dict = {}
-        config_dict.update(dataclasses.asdict(model_args))
-        config_dict.update(dataclasses.asdict(data_args))
-        # Tạo tên run dựa trên model và backbone
-        run_name = f"{model_args.model_name.split('/')[-1] if model_args.model_name else 'MMEB'}"
-        
-        wandb.init(
-            project="MMEB_Evaluation",  # Đặt tên project của bạn trên wandb
-            name=run_name,
-            config=config_dict,
-            reinit=True
-        )
+        # Đảm bảo report_to tồn tại và có chứa 'wandb'
+        reports = training_args.report_to
+        if reports is None:
+            reports = []
+        if isinstance(reports, str):
+            reports = [reports]
+            
+        if "wandb" in reports:
+            use_wandb = True
+            
+            # Chuyển dataclass thành dict để log config
+            config_dict = {}
+            config_dict.update(dataclasses.asdict(model_args))
+            config_dict.update(dataclasses.asdict(data_args))
+            
+            run_name = f"{model_args.model_name.split('/')[-1] if model_args.model_name else 'MMEB'}"
+            
+            wandb.init(
+                project="MMEB_Evaluation",
+                name=run_name,
+                config=config_dict,
+                reinit=True
+            )
+            print(f"✅ WandB initialized for run: {run_name}")
+        else:
+            print("🚫 WandB logging is DISABLED (set --report_to wandb to enable)")
 
     os.makedirs(data_args.encode_output_path, exist_ok=True)
 
@@ -215,7 +225,7 @@ def main():
                 print(score_dict)
                 
                 # Log cached result to wandb
-                if is_main_process:
+                if use_wandb:
                     wandb.log({
                         f"{subset}/acc": score_dict.get("acc", 0),
                         f"{subset}/num_correct": score_dict.get("num_correct", 0),
@@ -331,14 +341,14 @@ def main():
                 f.write(f"{item}\n")
         
         # ### MODIFIED: Log result to wandb
-        if is_main_process:
+        if use_wandb:
             wandb.log({
                 f"{subset}/acc": acc,
                 f"{subset}/num_correct": n_correct,
             })
     
     # ### MODIFIED: Finish wandb run
-    if is_main_process:
+    if use_wandb:
         wandb.finish()
 
 
