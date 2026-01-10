@@ -146,7 +146,7 @@ class Trainer:
             kd_rkd_loss = loss_dict.get('kd_loss_rkd', torch.tensor(0.0))
             ot_loss = loss_dict.get('ot_loss', torch.tensor(0.0))
             kd_dtw_loss = loss_dict.get('kd_loss_dtw', torch.tensor(0.0))
-            kd_mse_loss = loss_dict.get('kd_loss_mse', torch.tensor(0.0))
+            kd_mse_loss = loss_dict.get('kd_mse_loss', torch.tensor(0.0))
             kd_penultimate_loss = loss_dict.get('kd_penultimate_loss', torch.tensor(0.0))
 
             losses.append(loss.detach().item() * self.training_args.gradient_accumulation_steps)
