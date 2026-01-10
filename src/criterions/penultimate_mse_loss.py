@@ -169,49 +169,45 @@ class PenultimateMSELoss(nn.Module):
         for i in range(batch_size):
             stu_feat = None
             tea_feat = None
-            incre_id = 0
-            if student_qry_image_features is not None and teacher_qry_image_features is not None:
+            if student_qry_image_features is not None and teacher_qry_image_features is not None \
+                and cur_idx_qry_img < len(student_qry_image_features):
                 stu_feat = student_qry_image_features[cur_idx_qry_img]
                 tea_feat = teacher_qry_image_features[cur_idx_qry_img]
-                incre_id = 1
-            penultimate_loss += self._penultimate_loss(
-                projectors,
-                stu_hidden_state=student_qry_hidden_states[-2][i],
-                tea_hidden_state=teacher_qry_hidden_states[-2][i],
-                num_stu_text_tok=num_student_text_qry_tokens[i].item(),
-                num_tea_text_tok=num_teacher_text_qry_tokens[i].item(),
-                stu_img_feat=stu_feat,
-                tea_img_feat=tea_feat,
-                stu_grid_size=stu_qry_vision_grid_sizes[cur_idx_qry_img],
-                tea_grid_size=tea_qry_vision_grid_sizes[cur_idx_qry_img],
-                stu_attention_mask=student_qry_input['attention_mask'][i],
-                tea_attention_mask=teacher_qry_input['attention_mask'][i]
-            )
-            cur_idx_qry_img += incre_id
+                penultimate_loss += self._penultimate_loss(
+                    projectors,
+                    stu_hidden_state=student_qry_hidden_states[-2][i],
+                    tea_hidden_state=teacher_qry_hidden_states[-2][i],
+                    num_stu_text_tok=num_student_text_qry_tokens[i].item(),
+                    num_tea_text_tok=num_teacher_text_qry_tokens[i].item(),
+                    stu_img_feat=stu_feat,
+                    tea_img_feat=tea_feat,
+                    stu_grid_size=stu_qry_vision_grid_sizes[cur_idx_qry_img],
+                    tea_grid_size=tea_qry_vision_grid_sizes[cur_idx_qry_img],
+                    stu_attention_mask=student_qry_input['attention_mask'][i],
+                    tea_attention_mask=teacher_qry_input['attention_mask'][i]
+                )
+                cur_idx_qry_img += 1
 
             stu_feat = None
             tea_feat = None
-            incre_id = 0
-            if student_pos_image_features is not None and teacher_pos_image_features is not None:
+            if student_pos_image_features is not None and teacher_pos_image_features is not None \
+                and cur_idx_pos_img < len(student_pos_image_features):
                 stu_feat = student_pos_image_features[cur_idx_pos_img]
                 tea_feat = teacher_pos_image_features[cur_idx_pos_img]
-                incre_id = 1
-            penultimate_loss += self._penultimate_loss(
-                projectors,
-                stu_hidden_state=student_pos_hidden_states[-2][i],
-                tea_hidden_state=teacher_pos_hidden_states[-2][i],
-                num_stu_text_tok=num_student_text_pos_tokens[i].item(),
-                num_tea_text_tok=num_teacher_text_pos_tokens[i].item(),
-                stu_img_feat=stu_feat,
-                tea_img_feat=tea_feat,
-                stu_grid_size=stu_pos_vision_grid_sizes[cur_idx_pos_img],
-                tea_grid_size=tea_pos_vision_grid_sizes[cur_idx_pos_img],
-                stu_attention_mask=student_pos_input['attention_mask'][i],
-                tea_attention_mask=teacher_pos_input['attention_mask'][i]
-            )
-            cur_idx_pos_img += incre_id
-
-            penultimate_loss += penultimate_loss
+                penultimate_loss += self._penultimate_loss(
+                    projectors,
+                    stu_hidden_state=student_pos_hidden_states[-2][i],
+                    tea_hidden_state=teacher_pos_hidden_states[-2][i],
+                    num_stu_text_tok=num_student_text_pos_tokens[i].item(),
+                    num_tea_text_tok=num_teacher_text_pos_tokens[i].item(),
+                    stu_img_feat=stu_feat,
+                    tea_img_feat=tea_feat,
+                    stu_grid_size=stu_pos_vision_grid_sizes[cur_idx_pos_img],
+                    tea_grid_size=tea_pos_vision_grid_sizes[cur_idx_pos_img],
+                    stu_attention_mask=student_pos_input['attention_mask'][i],
+                    tea_attention_mask=teacher_pos_input['attention_mask'][i]
+                )
+                cur_idx_pos_img += 1
        
         penultimate_loss = penultimate_loss / (cur_idx_qry_img + cur_idx_pos_img + 1e-8) # mean loss over proceesed images
 
