@@ -54,6 +54,6 @@ torchrun --nproc_per_node=$NUM_GPUS_PER_NODE \
     --kd_weight 0.3 \
     --kd_loss_type "penultimate_mse" \
     --image_resolution "low" \
-    --projector_config_path "./config/projector_config.json" \
+    --projector_config_path "./config/projector_config_2.json" \
     --projector_lr 5e-5 \
     --report_to wandb 

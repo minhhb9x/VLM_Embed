@@ -39,9 +39,6 @@ class PenultimateMSELoss(nn.Module):
                             ):
             num_tokens_vision_stu = stu_img_feat.size(0) if stu_img_feat is not None else 0
             num_tokens_vision_tea = tea_img_feat.size(0) if tea_img_feat is not None else 0
-
-            if num_tokens_vision_stu == 0 or num_tokens_vision_tea == 0:
-                return torch.tensor(0.0, device=stu_hidden_state.device)
             
             _, stu_vision_hidden_state = get_hidden_text_vision(
                 stu_hidden_state,
