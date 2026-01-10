@@ -129,6 +129,7 @@ class Trainer:
         self.train_data.sampler.set_epoch(epoch)
         losses, contrastive_losses, kd_losses = [], [], []
         kd_rkd_losses, ot_losses, kd_dtw_losses = [], [], []
+        kd_mse_losses, kd_penultimate_losses = [], []
         
         # Tính tổng số bước (steps) trong epoch để log step
         steps_per_epoch = len(self.train_data.dataset) // self.training_args.per_device_train_batch_size // self.training_args.gradient_accumulation_steps // dist.get_world_size()
@@ -138,16 +139,15 @@ class Trainer:
                             disable=not dist.get_rank() == 0)
         for batch_idx, batch in enumerate(self.train_data):
             batch = to_device(batch, self.device)
-            loss_dict = self.model_wrapper(self.criterion, batch)
+            loss_dict = self.distiller(self.criterion, batch)
             loss = loss_dict['loss'] / self.training_args.gradient_accumulation_steps
             kd_loss = loss_dict.get('kd_loss', torch.tensor(0.0))
             contrastive_loss = loss_dict.get('contrastive_loss', torch.tensor(0.0))
             kd_rkd_loss = loss_dict.get('kd_loss_rkd', torch.tensor(0.0))
             ot_loss = loss_dict.get('ot_loss', torch.tensor(0.0))
             kd_dtw_loss = loss_dict.get('kd_loss_dtw', torch.tensor(0.0))
-            kd_loss_mse = loss_dict.get('kd_loss_mse', torch.tensor(0.0))
+            kd_mse_loss = loss_dict.get('kd_loss_mse', torch.tensor(0.0))
             kd_penultimate_loss = loss_dict.get('kd_penultimate_loss', torch.tensor(0.0))
-
 
             losses.append(loss.detach().item() * self.training_args.gradient_accumulation_steps)
             contrastive_losses.append(contrastive_loss.detach().item())
@@ -155,6 +155,8 @@ class Trainer:
             kd_rkd_losses.append(kd_rkd_loss.detach().item())
             ot_losses.append(ot_loss.detach().item())
             kd_dtw_losses.append(kd_dtw_loss.detach().item())
+            kd_mse_losses.append(kd_mse_loss.detach().item())
+            kd_penultimate_losses.append(kd_penultimate_loss.detach().item())
             
             batch_loss = sum(losses) / len(losses)
             batch_contrastive_loss = sum(contrastive_losses) / len(contrastive_losses)
@@ -162,8 +164,8 @@ class Trainer:
             batch_kd_rkd_loss = sum(kd_rkd_losses) / len(kd_rkd_losses)
             batch_ot_loss = sum(ot_losses) / len(ot_losses)
             batch_kd_dtw_loss = sum(kd_dtw_losses) / len(kd_dtw_losses)
-            batch_kd_loss_mse = sum(kd_loss_mse) / len(kd_loss_mse)
-            batch_kd_penultimate_loss = sum(kd_penultimate_loss) / len(kd_penultimate_loss)
+            batch_kd_loss_mse = sum(kd_mse_losses) / len(kd_mse_losses)
+            batch_kd_penultimate_loss = sum(kd_penultimate_losses) / len(kd_penultimate_losses)
             
             loss.backward()
             if (batch_idx + 1) % self.training_args.gradient_accumulation_steps == 0:

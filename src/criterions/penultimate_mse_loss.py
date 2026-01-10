@@ -214,7 +214,7 @@ class PenultimateMSELoss(nn.Module):
         return {
             'loss': loss,
             'contrastive_loss': contrastive_loss,
-            'kd_loss_mse': kd_mse_loss_reps,
+            'kd_mse_loss': kd_mse_loss_reps,
             'kd_loss': kd_loss,
             'kd_penultimate_loss': penultimate_loss
         }
