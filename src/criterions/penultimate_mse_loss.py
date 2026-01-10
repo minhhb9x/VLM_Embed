@@ -134,7 +134,7 @@ class PenultimateMSELoss(nn.Module):
         scores = scores.view(all_student_qry_reps.size(0), -1)
         target = torch.arange(scores.size(0), device=scores.device, dtype=torch.long)
         target = target * (all_student_qry_reps.size(0) // all_student_pos_reps.size(0))
-        contrastive_loss = nn.CrossEntropyLoss()(scores / self.distiller.temperature, target)
+        contrastive_loss = nn.CrossEntropyLoss()(scores / distiller.temperature, target)
 
         # KD loss on representations 
         projected_teacher_qry_reps = F.normalize(projectors["t2s"](teacher_qry_reps), p=2, dim=-1)
