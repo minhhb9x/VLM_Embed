@@ -265,16 +265,16 @@ class DistillationCollator:
         
         processed_student_qry_inputs = process_student_fn(student_qry_inputs, processor=self.student_processor, 
                                                           max_length=self.data_args.max_len, 
-                                                          )
+                                                          square_padding=True)
         processed_student_pos_inputs = process_student_fn(student_pos_inputs, processor=self.student_processor, 
                                                           max_length=self.data_args.max_len,
-                                                          )
+                                                          square_padding=True)
         processed_teacher_qry_inputs = process_teacher_fn(teacher_qry_inputs, processor=self.teacher_processor, 
                                                           max_length=self.data_args.max_len,
-                                                          )
+                                                          square_padding=True)
         processed_teacher_pos_inputs = process_teacher_fn(teacher_pos_inputs, processor=self.teacher_processor, 
                                                           max_length=self.data_args.max_len,
-                                                          )
+                                                          square_padding=True)
         
         return {
             'student_inputs':{

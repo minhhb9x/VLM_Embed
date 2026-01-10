@@ -6,6 +6,7 @@ from .universal_logit_distillation import UniversalLogitDistillation
 from .propose_with_proj import ProposalLossWithProj
 from .emo_loss import EMOLoss
 from .em_kd import EMKDLoss
+from .penultimate_mse_loss import PenultimateMSELoss
 
 criterion_list = {
     "contrastive": ContrastiveLoss,
@@ -16,6 +17,7 @@ criterion_list = {
     "emo_loss": EMOLoss,
     "em_kd": EMKDLoss,
     "vision_rkd": VisionRKDLoss,
+    "penultimate_mse": PenultimateMSELoss,
 }
 
 def build_criterion(args):

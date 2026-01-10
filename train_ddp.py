@@ -145,6 +145,9 @@ class Trainer:
             kd_rkd_loss = loss_dict.get('kd_loss_rkd', torch.tensor(0.0))
             ot_loss = loss_dict.get('ot_loss', torch.tensor(0.0))
             kd_dtw_loss = loss_dict.get('kd_loss_dtw', torch.tensor(0.0))
+            kd_loss_mse = loss_dict.get('kd_loss_mse', torch.tensor(0.0))
+            kd_penultimate_loss = loss_dict.get('kd_penultimate_loss', torch.tensor(0.0))
+
 
             losses.append(loss.detach().item() * self.training_args.gradient_accumulation_steps)
             contrastive_losses.append(contrastive_loss.detach().item())
@@ -159,6 +162,8 @@ class Trainer:
             batch_kd_rkd_loss = sum(kd_rkd_losses) / len(kd_rkd_losses)
             batch_ot_loss = sum(ot_losses) / len(ot_losses)
             batch_kd_dtw_loss = sum(kd_dtw_losses) / len(kd_dtw_losses)
+            batch_kd_loss_mse = sum(kd_loss_mse) / len(kd_loss_mse)
+            batch_kd_penultimate_loss = sum(kd_penultimate_loss) / len(kd_penultimate_loss)
             
             loss.backward()
             if (batch_idx + 1) % self.training_args.gradient_accumulation_steps == 0:
@@ -175,6 +180,8 @@ class Trainer:
                         'kd_rkd_loss': f"{batch_kd_rkd_loss:.4f}",
                         'ot_loss': f"{batch_ot_loss:.4f}",
                         'kd_dtw_loss': f"{batch_kd_dtw_loss:.4f}",
+                        'kd_loss_mse': f"{batch_kd_loss_mse:.4f}",
+                        'kd_penultimate_loss': f"{batch_kd_penultimate_loss:.4f}",
                         'lr': f"{self.lr_scheduler.get_last_lr()[0]:.6f}",
                     })
                     progress_bar.update(1)
@@ -190,6 +197,8 @@ class Trainer:
                             "train/kd_rkd_loss": batch_kd_rkd_loss,
                             "train/ot_loss": batch_ot_loss,
                             "train/kd_dtw_loss": batch_kd_dtw_loss,
+                            "train/kd_loss_mse": batch_kd_loss_mse,
+                            "train/kd_penultimate_loss": batch_kd_penultimate_loss,
                             "train/learning_rate": current_lr,
                             "train/epoch": epoch + ((batch_idx + 1) / self.training_args.gradient_accumulation_steps) / steps_per_epoch
                         })

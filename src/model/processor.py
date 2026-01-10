@@ -277,7 +277,7 @@ def load_processor(model_args, data_args=None):
                                              image_mean=[0.0, 0.0, 0.0],
                                              image_std=[1.0, 1.0, 1.0],
                                              size={"shortest_edge": 1024})
-        processor = FastVLMProcessor2(
+        processor = FastVLMProcessor(
             image_processor=image_processor,
             tokenizer=tokenizer
         )
