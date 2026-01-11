@@ -1,3 +1,4 @@
+from src.criterions.contrastive_kd_loss import ContrastiveKDLoss
 from src.criterions.contrastive_loss import ContrastiveLoss
 from src.criterions.vision_RKD import VisionRKDLoss
 from .contrastive_loss_with_RKD import ContrastiveLossWithRKD
@@ -18,6 +19,7 @@ criterion_list = {
     "em_kd": EMKDLoss,
     "vision_rkd": VisionRKDLoss,
     "penultimate_mse": PenultimateMSELoss,
+    "contrastive_kd": ContrastiveKDLoss,
 }
 
 def build_criterion(args):
