@@ -8,6 +8,7 @@ from .propose_with_proj import ProposalLossWithProj
 from .emo_loss import EMOLoss
 from .em_kd import EMKDLoss
 from .penultimate_mse_loss import PenultimateMSELoss
+from .vision_encoder_kd_loss import VisionEncoderLoss
 
 criterion_list = {
     "contrastive": ContrastiveLoss,
@@ -20,6 +21,7 @@ criterion_list = {
     "vision_rkd": VisionRKDLoss,
     "penultimate_mse": PenultimateMSELoss,
     "contrastive_kd": ContrastiveKDLoss,
+    "vision_encoder_kd": VisionEncoderLoss,
 }
 
 def build_criterion(args):
