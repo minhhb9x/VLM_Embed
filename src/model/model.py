@@ -441,9 +441,6 @@ class MMEBModel(nn.Module):
             lora_config = LoraConfig.from_pretrained(model_name_or_path)
             lora_model = PeftModel.from_pretrained(base_model, model_name_or_path, config=lora_config, is_trainable=is_trainable)
             lora_model.load_adapter(model_name_or_path, lora_model.active_adapter, is_trainable=is_trainable)
-            
-            if not is_trainable:
-                lora_model = lora_model.merge_and_unload()
 
             projector_path = os.path.join(model_name_or_path, "mm_projector.pth")
 
@@ -466,7 +463,8 @@ class MMEBModel(nn.Module):
                 except:
                     print("No projector weight found.")
                 
-            # lora_model = lora_model.merge_and_unload()
+            if not is_trainable:
+                lora_model = lora_model.merge_and_unload()
 
             model = cls(
                 encoder=lora_model,
